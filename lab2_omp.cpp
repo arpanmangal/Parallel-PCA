@@ -2,6 +2,7 @@
 #include <stdlib.h> 
 #include <malloc.h>
 #include <omp.h>
+#include <math.h>
 
 int min (int a, int b) {
     return (a < b) ? a : b;
@@ -78,7 +79,7 @@ double VectorNorm (double *A, int m) {
     for (int i = 0; i < m; i++)
         norm += A[i] * A[i];
 
-    return norm;
+    return sqrt(norm);
 }
 
 double InnerProduct (double *A, double *B, int m) {
@@ -122,7 +123,7 @@ void MatrixAssign (double *A, double *B, int m, int n) {
 void MatrixProj (double *A, double *U, double *P, int N) {
     // All N * 1 Matrix
     // Project A on U
-    double factor = InnerProduct (U, A, N) / VectorNorm (U, N);
+    double factor = InnerProduct (U, A, N) / InnerProduct (U, U, N);
     ScalarMultiply (U, P, N, 1, factor);
 }
 
@@ -135,10 +136,21 @@ void makeTriangular (double *M, int N, int upper=1) {
                 M[i*N + j] = 0;
 }
 
+void printMatrix (double *M, int m, int n) {
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            printf("%f ", M[i*n + j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
 void GramSchmidt (double *A, int N, double *At, double *u, double *e, double *p, double *Q, double *R) {
     // Just allocate At, u, e matrices to be N*N; p matrix to be N * 1
-
+    
     MatrixTranspose (A, At, N);
+
     for (int k = 0; k < N; k++) {
         MatrixAssign (At + k*N, u + k*N, N, 1);
         for (int j = 0; j < k; j++) {
@@ -152,6 +164,7 @@ void GramSchmidt (double *A, int N, double *At, double *u, double *e, double *p,
 
     MatrixTranspose (e, Q, N);
     MatrixMultiply (e, A, R, N, N, N);
+    printMatrix(R, N, N);
     makeTriangular (R, N, 1);
 }
 
@@ -160,50 +173,82 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     omp_set_num_threads(4);
     srand (0); // Deterministically Random
 
-    // int m = 2758, n = 4002, p = 2920;
-    int m = 1, n = 10000, p = 1;
-    int I = 5;
-    double *A = (double *) malloc (sizeof(double) * m * n);
-    double *B = (double *) malloc (sizeof(double) * n * p);
-    double *C = (double *) malloc (sizeof(double) * I * I);
-    double *Cp = (double *) malloc (sizeof(double) * I * I); 
+    N = 3;
+    double a[] = {12, -51, 4, 6, 167, -68, -4, 24, -41};
+    double *A = (double *) malloc (sizeof(double) * N * N);
 
-    for (int a = 0; a < m*n; a++) {
-        A[a] = (rand() % 100000) / 100000.0;
-        A[a] = 10;
+    for (int i = 0; i < 9; i++)
+        A[i] = a[i];
+
+    double *At = (double *) malloc (sizeof(double) * N * N);
+    double *u = (double *) malloc (sizeof(double) * N * N);
+    double *e = (double *) malloc (sizeof(double) * N * N);
+    double *p = (double *) malloc (sizeof(double) * N);
+    double *Q = (double *) malloc (sizeof(double) * N * N);
+    double *R = (double *) malloc (sizeof(double) * N * N);
+
+    GramSchmidt (A, N, At, u, e, p, Q, R);
+
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            printf("%f ", Q[i*N + j]);
+        }
+        printf("\n");
     }
-    for (int b = 0; b < n*p; b++) {
-        B[b] = (rand() % 100000) / 100000.0;
-        // B[b] = b;
+    printf("\n");
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            printf("%f ", R[i*N + j]);
+        }
+        printf("\n");
     }
-    for (int i = 0; i < I; i++) 
-        for (int j = 0; j < I; j++)
-            C[i*I+j] = rand() % 100;
+
     
+
+    // // int m = 2758, n = 4002, p = 2920;
+    // int m = 1, n = 10000, p = 1;
+    // int I = 5;
+    // double *A = (double *) malloc (sizeof(double) * m * n);
+    // double *B = (double *) malloc (sizeof(double) * n * p);
+    // double *C = (double *) malloc (sizeof(double) * I * I);
+    // double *Cp = (double *) malloc (sizeof(double) * I * I); 
+
+    // for (int a = 0; a < m*n; a++) {
+    //     A[a] = (rand() % 100000) / 100000.0;
+    //     A[a] = 10;
+    // }
+    // for (int b = 0; b < n*p; b++) {
+    //     B[b] = (rand() % 100000) / 100000.0;
+    //     // B[b] = b;
+    // }
+    // for (int i = 0; i < I; i++) 
+    //     for (int j = 0; j < I; j++)
+    //         C[i*I+j] = rand() % 100;
+    
+    // // double start_time = omp_get_wtime();
+    // // MatrixMultiply (A, B, C, m, n, p, 0);
+    // // double end_time = omp_get_wtime();
+    // // printf("Seq time: %f\n", end_time - start_time);
+
+    // for (int i = 0; i < I; i++) {
+    //     for (int j = 0; j < I; j++)
+    //         printf("%f ", C[i*I+j]);
+    //     printf("\n");
+    // }
+    //     printf("\n");
+
     // double start_time = omp_get_wtime();
-    // MatrixMultiply (A, B, C, m, n, p, 0);
+    // double norm = VectorNorm (A, n);
+    // // MatrixSubtract (A, A, A, m, n);
+    // // ScalarDivide (A, A, m, n, 10);
+    // MatrixTranspose(C, Cp, I);
+    // // makeIdenMatrix (C, I);
     // double end_time = omp_get_wtime();
-    // printf("Seq time: %f\n", end_time - start_time);
-
-    for (int i = 0; i < I; i++) {
-        for (int j = 0; j < I; j++)
-            printf("%f ", C[i*I+j]);
-        printf("\n");
-    }
-        printf("\n");
-
-    double start_time = omp_get_wtime();
-    double norm = VectorNorm (A, n);
-    // MatrixSubtract (A, A, A, m, n);
-    // ScalarDivide (A, A, m, n, 10);
-    MatrixTranspose(C, Cp, I);
-    // makeIdenMatrix (C, I);
-    double end_time = omp_get_wtime();
-    for (int i = 0; i < I; i++) {
-        for (int j = 0; j < I; j++)
-            printf("%f ", Cp[i*I+j]);
-        printf("\n");
-    }
+    // for (int i = 0; i < I; i++) {
+    //     for (int j = 0; j < I; j++)
+    //         printf("%f ", Cp[i*I+j]);
+    //     printf("\n");
+    // }
     // for (int i = 0; i < I; i++) {
     //     for (int j = 0; j < I; j++) 
     //         printf("%f ", C[i*I+j]);
