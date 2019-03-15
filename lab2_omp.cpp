@@ -164,21 +164,14 @@ void GramSchmidt (double *A, int N, double *At, double *u, double *e, double *p,
 
     MatrixTranspose (e, Q, N);
     MatrixMultiply (e, A, R, N, N, N);
-    printMatrix(R, N, N);
+    // printMatrix(R, N, N);
     makeTriangular (R, N, 1);
 }
 
-void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
-{
-    omp_set_num_threads(4);
-    srand (0); // Deterministically Random
-
-    N = 3;
-    double a[] = {12, -51, 4, 6, 167, -68, -4, 24, -41};
-    double *A = (double *) malloc (sizeof(double) * N * N);
-
-    for (int i = 0; i < 9; i++)
-        A[i] = a[i];
+void QR (double *D, int N, double *Evals, double *E) {
+    double *lD = (double *) malloc (sizeof(double) * N * N);
+    MatrixAssign (D, lD, N, N);
+    makeIdenMatrix (E, N);
 
     double *At = (double *) malloc (sizeof(double) * N * N);
     double *u = (double *) malloc (sizeof(double) * N * N);
@@ -186,22 +179,70 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     double *p = (double *) malloc (sizeof(double) * N);
     double *Q = (double *) malloc (sizeof(double) * N * N);
     double *R = (double *) malloc (sizeof(double) * N * N);
+    double *E_next = (double *) malloc (sizeof(double) * N * N);
 
-    GramSchmidt (A, N, At, u, e, p, Q, R);
+    for (int i = 0; i < 10000; i++) {
+        // printMatrix (E, N, N);
+        GramSchmidt (lD, N, At, u, e, p, Q, R);
+        // printMatrix (Q, N, N);
+        // printMatrix (R, N, N);
+        MatrixMultiply (R, Q, lD, N, N, N);
+        MatrixMultiply (E, Q, E_next, N, N, N);
+        MatrixAssign (E_next, E, N, N);
+    }
+    printMatrix (lD, N, N);
+    printMatrix (E, N, N);
 
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            printf("%f ", Q[i*N + j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            printf("%f ", R[i*N + j]);
-        }
-        printf("\n");
-    }
+    free(lD);
+    free(At);
+    free(u);
+    free (e);
+    free(p);
+    free(Q);
+    free(R);
+}
+
+void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
+{
+    omp_set_num_threads(4);
+    srand (0); // Deterministically Random
+
+    N = 2;
+    // double a[] = {12, -51, 4, 6, 167, -68, -4, 24, -41};
+    // double a[] = {-2, -4, 2, -2, 1, 2, 4, 2, 5};
+    double a[] = {24, -15, -15, 25};
+    double *A = (double *) malloc (sizeof(double) * N * N);
+
+    for (int i = 0; i < 9; i++)
+        A[i] = a[i];
+
+    double *E_vals = (double *) malloc (sizeof(double) * N);
+    double *E = (double *) malloc (sizeof(double) * N * N);
+
+    QR (A, N, E_vals, E);
+
+    // double *At = (double *) malloc (sizeof(double) * N * N);
+    // double *u = (double *) malloc (sizeof(double) * N * N);
+    // double *e = (double *) malloc (sizeof(double) * N * N);
+    // double *p = (double *) malloc (sizeof(double) * N);
+    // double *Q = (double *) malloc (sizeof(double) * N * N);
+    // double *R = (double *) malloc (sizeof(double) * N * N);
+
+    // GramSchmidt (A, N, At, u, e, p, Q, R);
+
+    // for (int i = 0; i < N; i++) {
+    //     for (int j = 0; j < N; j++) {
+    //         printf("%f ", Q[i*N + j]);
+    //     }
+    //     printf("\n");
+    // }
+    // printf("\n");
+    // for (int i = 0; i < N; i++) {
+    //     for (int j = 0; j < N; j++) {
+    //         printf("%f ", R[i*N + j]);
+    //     }
+    //     printf("\n");
+    // }
 
     
 
