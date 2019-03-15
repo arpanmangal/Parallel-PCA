@@ -1,2 +1,2 @@
-# Parallel-SVD
-Parallelized SVD implementation using OpenMP
+# Parallel-PCA
+Parallelized PCA implementation using OpenMP

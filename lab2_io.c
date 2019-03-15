@@ -24,4 +24,5 @@ void write_result (int M,
 		float* D_HAT,
 		double computation_time){
 	// Will contain output code
+	printf("Time taken: %.4f\n", computation_time);
 }
