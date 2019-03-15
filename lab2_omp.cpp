@@ -74,18 +74,27 @@ void MatrixSubtract (double *A, double *B, double *C, int m, int n) {
 
 double VectorNorm (double *A, int m) {
     double norm = 0;
-    #pragma omp parallel for schedule (dynamic, 64) reduction (+ : norm)
+    #pragma omp parallel for schedule (dynamic, 64) reduction (+:norm)
     for (int i = 0; i < m; i++)
         norm += A[i] * A[i];
 
     return norm;
 }
 
-void ScalarDivide (double *A, double *N, int m, int n, double alpha) {
+double InnerProduct (double *A, double *B, int m) {
+    double IP = 0;
+    #pragma omp parallel for schedule (dynamic, 64) reduction (+:IP)
+    for (int i = 0; i < m; i++)
+        IP += A[i] * B[i];
+
+    return IP;
+}
+
+void ScalarMultiply (double *A, double *B, int m, int n, double alpha) {
     int size = m * n;
     #pragma omp parallel for schedule (dynamic, 64)
     for (int i = 0; i < size; i++)
-        N[i] = A[i] / alpha;
+        B[i] = A[i] * alpha;
 }
 
 void makeIdenMatrix (double *I, int m) {
@@ -94,6 +103,56 @@ void makeIdenMatrix (double *I, int m) {
     for (int i = 0; i < m; i++)
         for (int j = 0; j < m; j++)
             I[i*m + j] = (i == j);
+}
+
+void MatrixTranspose (double *A, double *B, int n) {
+    #pragma omp parallel for schedule (dynamic, 64) collapse (2)
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+            B[i*n + j] = A[j*n + i];
+}
+
+void MatrixAssign (double *A, double *B, int m, int n) {
+    int size = m * n;
+    #pragma omp parallel for schedule (dynamic, 64)
+    for (int i = 0; i < size; i++)
+        B[i] = A[i];
+}
+
+void MatrixProj (double *A, double *U, double *P, int N) {
+    // All N * 1 Matrix
+    // Project A on U
+    double factor = InnerProduct (U, A, N) / VectorNorm (U, N);
+    ScalarMultiply (U, P, N, 1, factor);
+}
+
+void makeTriangular (double *M, int N, int upper=1) {
+    // Make the matrix triangular
+    #pragma omp parallel for schedule (dynamic, 64) collapse (2)
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++)
+            if ((upper == 1 && j < i) || (upper == 0 && j > i))
+                M[i*N + j] = 0;
+}
+
+void GramSchmidt (double *A, int N, double *At, double *u, double *e, double *p, double *Q, double *R) {
+    // Just allocate At, u, e matrices to be N*N; p matrix to be N * 1
+
+    MatrixTranspose (A, At, N);
+    for (int k = 0; k < N; k++) {
+        MatrixAssign (At + k*N, u + k*N, N, 1);
+        for (int j = 0; j < k; j++) {
+            MatrixProj (At + k*N, u + j*N, p, N);
+            MatrixSubtract (u + k*N, p, u + k*N, N, 1);
+        }
+
+        double uNorm = VectorNorm (u + k*N, N);
+        ScalarMultiply (u + k*N, e + k*N, N, 1, 1 / uNorm);
+    }
+
+    MatrixTranspose (e, Q, N);
+    MatrixMultiply (e, A, R, N, N, N);
+    makeTriangular (R, N, 1);
 }
 
 void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
@@ -107,7 +166,7 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     double *A = (double *) malloc (sizeof(double) * m * n);
     double *B = (double *) malloc (sizeof(double) * n * p);
     double *C = (double *) malloc (sizeof(double) * I * I);
-    double *Cp = (double *) malloc (sizeof(double) * m * p); 
+    double *Cp = (double *) malloc (sizeof(double) * I * I); 
 
     for (int a = 0; a < m*n; a++) {
         A[a] = (rand() % 100000) / 100000.0;
@@ -117,34 +176,50 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
         B[b] = (rand() % 100000) / 100000.0;
         // B[b] = b;
     }
+    for (int i = 0; i < I; i++) 
+        for (int j = 0; j < I; j++)
+            C[i*I+j] = rand() % 100;
     
     // double start_time = omp_get_wtime();
     // MatrixMultiply (A, B, C, m, n, p, 0);
     // double end_time = omp_get_wtime();
     // printf("Seq time: %f\n", end_time - start_time);
 
+    for (int i = 0; i < I; i++) {
+        for (int j = 0; j < I; j++)
+            printf("%f ", C[i*I+j]);
+        printf("\n");
+    }
+        printf("\n");
+
     double start_time = omp_get_wtime();
     double norm = VectorNorm (A, n);
     // MatrixSubtract (A, A, A, m, n);
     // ScalarDivide (A, A, m, n, 10);
-    makeIdenMatrix (C, I);
+    MatrixTranspose(C, Cp, I);
+    // makeIdenMatrix (C, I);
     double end_time = omp_get_wtime();
     for (int i = 0; i < I; i++) {
-        for (int j = 0; j < I; j++) 
-            printf("%f ", C[i*I+j]);
+        for (int j = 0; j < I; j++)
+            printf("%f ", Cp[i*I+j]);
         printf("\n");
     }
-    printf ("%f\n", norm);
-    MatrixMultiply (A, A, Cp, m, n, p, 0);
-    printf("Par time: %f\n", end_time - start_time);
+    // for (int i = 0; i < I; i++) {
+    //     for (int j = 0; j < I; j++) 
+    //         printf("%f ", C[i*I+j]);
+    //     printf("\n");
+    // }
+    // printf ("%f\n", norm);
+    // MatrixMultiply (A, A, Cp, m, n, p, 0);
+    // printf("Par time: %f\n", end_time - start_time);
 
-    for (int c = 0; c < m*p; c++) {
-        printf("%f ", Cp[c]);
-        // if (abs(C[c] - Cp[c]) > 1e-5) {
-        //     printf("Not Same!! c=%d | C=%f | Cp=%f \n", c, C[c], Cp[c]);
-        //     break;
-        // }
-    }
+    // for (int c = 0; c < m*p; c++) {
+    //     printf("%f ", Cp[c]);
+    //     // if (abs(C[c] - Cp[c]) > 1e-5) {
+    //     //     printf("Not Same!! c=%d | C=%f | Cp=%f \n", c, C[c], Cp[c]);
+    //     //     break;
+    //     // }
+    // }
 }
 
 void PCA(int retention, int M, int N, float* D, float* U, float* SIGMA, float** D_HAT, int *K)
