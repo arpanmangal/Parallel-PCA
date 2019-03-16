@@ -37,5 +37,7 @@ void write_result (int M,
 	printf("Time taken: %.4f\n", computation_time);
 	printMatrix (U, N, N);
     printMatrix (SIGMA, 1, N);
-    printMatrix (V_T, M, M);
+	printf("\n%d %d %d\n\n", M, N, K);
+	// printMatrix (D_HAT, M, K);
+    // printMatrix (V_T, M, M);
 }

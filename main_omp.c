@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <omp.h>
 
+#include <stdio.h>
+#include <string.h>
+
 /*
 	Arguments:
 		arg1: input filename (consist M, N and D)
@@ -49,15 +52,21 @@ int main(int argc, char const *argv[])
         --------------------------------------------------------------------------------------
 	*/
 	// read_matrix (argv[1], &M, &N, &D);
-	N = 3;
-    M = 4;
-	float a[] = {5, 3, 0, 3, 2, 0, 0, 2, 8, 1, 6, 7};
+	N = 4;
+    M = 150;
+	// float a[] = {5, 3, 0, 3, 2, 0, 0, 2, 8, 1, 6, 7};
 	// float a[] = {4, 3, 0, -5};
     D = (float *) malloc (sizeof(float) * M * N);
 
-	for (int i = 0; i < M*N; i++)
-        D[i] = a[i];
+	// for (int i = 0; i < M*N; i++)
+    //     D[i] = a[i];
 
+	for (int i = 0; i < M; i++) {
+		for (int j = 0; j < N; j++) {
+			float in;
+			scanf ("%f", D + i*N + j);
+		}
+	}
 	printf ("%d %d\n", M, N);
 	U = (float*) malloc(sizeof(float) * N*N);
 	SIGMA = (float*) malloc(sizeof(float) * N);
