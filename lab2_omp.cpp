@@ -212,7 +212,7 @@ void QR (double *D, double *lD, int N, double *Evals, double *E) {
     double *R = (double *) malloc (sizeof(double) * N * N);
     double *E_next = (double *) malloc (sizeof(double) * N * N);
 
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 10000; i++) {
         // printMatrix (lD, N, N);
         GramSchmidt (lD, N, At, u, e, p, Q, R);
         // printMatrix (Q, N, N);
@@ -223,14 +223,14 @@ void QR (double *D, double *lD, int N, double *Evals, double *E) {
     }
     printMatrix (lD, N, N);
     printMatrix (E, N, N);
-    // exit(0);
 
     #pragma omp parallel for schedule (dynamic, 64)
     for (int i = 0; i < N; i++) {
         Evals[i] = lD[i*N+i];
     }
 
-    // printMatrix (Evals, 1, N);
+    printMatrix (Evals, 1, N);
+    // exit(0);
     free(At);
     free(u);
     free (e);
@@ -262,12 +262,16 @@ void Decompose (double * Dt, double *E, double* E_vals, int M, int N, double *U,
     printMatrix (E, M, M);
     MatrixTranspose (E, V_T, M, M);
     printMatrix (V_T, M, M);
+    // exit(0);
     MatrixAssign (V_T, E, M, M);
+    printMatrix (E, M, M);
+    // exit(0);
 
     // Possible parallelisation => no
     for (int i = 0; i < M; i++) {
         int rank = EigenVals[i].second;
-        MatrixAssign (E + rank*N, V_T + i*M, M, 1);
+        printf("%d\n", rank);
+        MatrixAssign (E + rank*M, V_T + i*M, 1, M);
         if (i < N)
             SIGMA [i] = EigenVals[i].first;
     }
