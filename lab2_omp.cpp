@@ -3,6 +3,8 @@
 #include <malloc.h>
 #include <omp.h>
 #include <math.h>
+#include <vector>
+#include <algorithm> // Used for sorting code
 
 int min (int a, int b) {
     return (a < b) ? a : b;
@@ -168,8 +170,7 @@ void GramSchmidt (float *A, int N, float *At, float *u, float *e, float *p, floa
     makeTriangular (R, N, 1);
 }
 
-void QR (float *D, int N, float *Evals, float *E) {
-    float *lD = (float *) malloc (sizeof(float) * N * N);
+void QR (float *D, float *lD, int N, float *Evals, float *E) {
     MatrixAssign (D, lD, N, N);
     makeIdenMatrix (E, N);
 
@@ -190,16 +191,81 @@ void QR (float *D, int N, float *Evals, float *E) {
         MatrixMultiply (E, Q, E_next, N, N, N);
         MatrixAssign (E_next, E, N, N);
     }
-    printMatrix (lD, N, N);
-    printMatrix (E, N, N);
+    // printMatrix (lD, N, N);
+    // printMatrix (E, N, N);
 
-    free(lD);
+    #pragma omp parallel for schedule (dynamic, 64)
+    for (int i = 0; i < N; i++) {
+        Evals[i] = lD[i*N+i];
+    }
+
+    // printMatrix (Evals, 1, N);
     free(At);
     free(u);
     free (e);
     free(p);
     free(Q);
     free(R);
+}
+
+bool sortPair (std::pair<float, int> &a, std::pair<float, int> &b)
+{
+    return (a.first > b.first);
+}
+void Decompose (float * Dt, float *E, float* E_vals, int M, int N, float *U, float *SIGMA, float *V_T)
+{
+    // D is M*M, U is N*N, SIGMA => N, V_T => M*M
+    double start_time = omp_get_wtime();
+    std::vector<std::pair<float, int>> EigenVals;
+    for (int i = 0; i < M; i++) {
+        EigenVals.push_back(std::make_pair(sqrt(abs(E_vals[i])), i));
+    }
+    std::sort (EigenVals.begin(), EigenVals.end(), sortPair);
+
+    printf("$$$\n");
+    for (int i = 0; i < M; i++) {
+        printf("%f ", EigenVals[i].first);
+    }
+    printf ("\n");
+    
+    printMatrix (E, M, M);
+    MatrixTranspose (E, V_T, M, M);
+    printMatrix (V_T, M, M);
+    MatrixAssign (V_T, E, M, M);
+
+    // Possible parallelisation => no
+    for (int i = 0; i < M; i++) {
+        int rank = EigenVals[i].second;
+        MatrixAssign (E + rank*N, V_T + i*M, M, 1);
+        if (i < N)
+            SIGMA [i] = EigenVals[i].first;
+    }
+
+    printMatrix (V_T, M, M);
+    printMatrix (SIGMA, N, 1);
+
+    float *SigmaInvMatrix = (float *) malloc (sizeof(float) * M * N);
+    float *VSigmaInvMatrix = (float *) malloc (sizeof(float) * M * N);
+
+    #pragma omp parallel for schedule (dynamic, 64) collapse (2)
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < N; j++) {
+            SigmaInvMatrix [i*N + j] = (i == j) * (1 / SIGMA[j]);
+        }
+    }
+    printMatrix (SigmaInvMatrix, M, N);
+    MatrixTranspose (V_T, E, M, M);
+    printMatrix (E, M, M);
+    MatrixMultiply (E, SigmaInvMatrix, VSigmaInvMatrix, M, M, N);
+
+    MatrixMultiply (Dt, VSigmaInvMatrix, U, N, M, N);
+    printMatrix (U, N, N);
+    printMatrix (SIGMA, N, 1);
+    printMatrix (V_T, M, M);
+    exit(0);
+
+    double end_time = omp_get_wtime();
+    printf("Decompose time: %f\n", end_time - start_time);
 }
 
 void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
@@ -221,27 +287,53 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     // printMatrix (B, N, M);
     // return;
 
-    N = 2;
-    // float a[] = {12, -51, 4, 6, 167, -68, -4, 24, -41};
-    // float a[] = {-2, -4, 2, -2, 1, 2, 4, 2, 5};
-    float a[] = {25, -15, -15, 25};
-    float *A = (float *) malloc (sizeof(float) * N * N);
+    // N = 2;
+    // M = 2;
+    // // float a[] = {12, -51, 4, 6, 167, -68, -4, 24, -41};
+    // // float a[] = {-2, -4, 2, -2, 1, 2, 4, 2, 5};
+    // float a[] = {25, -15, -15, 25};
+    // float *A = (float *) malloc (sizeof(float) * N * N);
 
-    for (int i = 0; i < N*N; i++)
-        A[i] = a[i];
+    // for (int i = 0; i < N*N; i++)
+    //     A[i] = a[i];
 
-    float *E_vals = (float *) malloc (sizeof(float) * N);
-    float *E = (float *) malloc (sizeof(float) * N * N);
+    // float *E_vals = (float *) malloc (sizeof(float) * N);
+    // float *E = (float *) malloc (sizeof(float) * N * N);
+    // float *lD = (float *) malloc (sizeof(float) * N * N);
 
-    QR (A, N, E_vals, E);
+    // QR (A, lD, N, E_vals, E);
 
-    return;
-
+    // return;
+    printMatrix (D, M, N);
     float *Dt = (float *) malloc (sizeof(float) * N * M);
     MatrixTranspose (D, Dt, M, N);
+    printMatrix (Dt, N, M);
 
     float *SVDMatrix = (float *) malloc (sizeof(float) * M * M);
     MatrixMultiply (D, Dt, SVDMatrix, M, N, M);
+
+    printMatrix (SVDMatrix, M, M);
+
+    float *E_vals = (float *) malloc (sizeof(float) * M);
+    float *E = (float *) malloc (sizeof(float) * M * M);
+    float *lD = (float *) malloc (sizeof(float) * M * M);
+
+    // Finding all eigenvalues
+    QR (SVDMatrix, lD, M, E_vals, E);
+
+    printMatrix (SVDMatrix, M, M);
+    printMatrix (lD, M, M);
+    printMatrix (E_vals, 1, M);
+    printMatrix (E, M, M);
+
+    // Extracting first N eigenvalues and computing UVSigma
+    Decompose (Dt, E, E_vals, M, N, *U, *SIGMA, *V_T);
+    printMatrix (lD, M, M);
+    printMatrix (E_vals, 1, M);
+    printMatrix (*U, N, N);
+    printMatrix (*SIGMA, 1, N);
+    printMatrix (*V_T, M, M);
+    return;
 
 
     // float *At = (float *) malloc (sizeof(float) * N * N);
