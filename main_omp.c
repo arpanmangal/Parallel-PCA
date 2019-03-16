@@ -52,6 +52,7 @@ int main(int argc, char const *argv[])
 	N = 3;
     M = 4;
 	float a[] = {5, 3, 0, 3, 2, 0, 0, 2, 8, 1, 6, 7};
+	// float a[] = {4, 3, 0, -5};
     D = (float *) malloc (sizeof(float) * M * N);
 
 	for (int i = 0; i < M*N; i++)

@@ -177,6 +177,18 @@ void GramSchmidt (double *A, int N, double *At, double *u, double *e, double *p,
     makeTriangular (R, N, 1);
 }
 
+bool hasConverged (double *E, double *E_next, int N) {
+    double diff;
+    #pragma omp parallel for collapse(2) schedule (dynamic, 64) reduction (+:diff)
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            diff += abs(E[i*N+j] - E_next[i*N+j]);
+        }
+    }
+
+    return (diff < 1e-6);
+}
+
 void QR (double *D, double *lD, int N, double *Evals, double *E) {
     MatrixAssign (D, lD, N, N);
     makeIdenMatrix (E, N);
@@ -193,10 +205,16 @@ void QR (double *D, double *lD, int N, double *Evals, double *E) {
         GramSchmidt (lD, N, At, u, e, p, Q, R);
         MatrixMultiply (R, Q, lD, N, N, N);
         MatrixMultiply (E, Q, E_next, N, N, N);
+        if (hasConverged(E, E_next, N)) {
+            printf("converged: %d\n", i);
+            break;
+        }
         MatrixAssign (E_next, E, N, N);
     }
+
     // printMatrix (lD, N, N);
     // printMatrix (E, N, N);
+    // exit(0);
 
     #pragma omp parallel for schedule (dynamic, 64)
     for (int i = 0; i < N; i++) {
