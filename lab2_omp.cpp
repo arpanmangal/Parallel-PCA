@@ -135,15 +135,15 @@ void makeTriangular (double *M, int N, int upper=1) {
                 M[i*N + j] = 0;
 }
 
-void printMatrix (double *M, int m, int n) {
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < n; j++) {
-            printf("%f ", M[i*n + j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
+// void printMatrix (double *M, int m, int n) {
+//     for (int i = 0; i < m; i++) {
+//         for (int j = 0; j < n; j++) {
+//             printf("%f ", M[i*n + j]);
+//         }
+//         printf("\n");
+//     }
+//     printf("\n");
+// }
 
 void GramSchmidt (double *A, int N, double *At, double *u, double *e, double *p, double *Q, double *R) {
     // Just allocate At, u, e matrices to be N*N; p matrix to be N * 1
@@ -206,15 +206,10 @@ void QR (double *D, double *lD, int N, double *Evals, double *E) {
         MatrixMultiply (R, Q, lD, N, N, N);
         MatrixMultiply (E, Q, E_next, N, N, N);
         if (hasConverged(E, E_next, N)) {
-            printf("converged: %d\n", i);
             break;
         }
         MatrixAssign (E_next, E, N, N);
     }
-
-    // printMatrix (lD, N, N);
-    // printMatrix (E, N, N);
-    // exit(0);
 
     #pragma omp parallel for schedule (dynamic, 64)
     for (int i = 0; i < N; i++) {
@@ -236,7 +231,6 @@ bool sortPair (std::pair<double, int> &a, std::pair<double, int> &b)
 void Decompose (double * Dt, double *E, double* E_vals, int M, int N, double *U, double *SIGMA, double *V_T)
 {
     // D is M*M, U is N*N, SIGMA => N, V_T => M*M
-    double start_time = omp_get_wtime();
     std::vector<std::pair<double, int>> EigenVals;
     for (int i = 0; i < M; i++) {
         EigenVals.push_back(std::make_pair(sqrt(abs(E_vals[i])), i));
@@ -267,9 +261,6 @@ void Decompose (double * Dt, double *E, double* E_vals, int M, int N, double *U,
     MatrixMultiply (E, SigmaInvMatrix, VSigmaInvMatrix, M, M, N);
 
     MatrixMultiply (Dt, VSigmaInvMatrix, U, N, M, N);
-
-    double end_time = omp_get_wtime();
-    printf("Decompose time: %f\n", end_time - start_time);
 }
 
 void SVD(int M, int N, float* Df, float** Uf, float** SIGMAf, float** V_Tf)
@@ -284,8 +275,6 @@ void SVD(int M, int N, float* Df, float** Uf, float** SIGMAf, float** V_Tf)
 	double *V_T = (double*) malloc(sizeof(double) * M*M);
 
     MatrixAssignFtoD (Df, D, M, N);
-    // printMatrix (D, M, N);
-    // exit(0);
 
     double *Dt = (double *) malloc (sizeof(double) * N * M);
     MatrixTranspose (D, Dt, M, N);
@@ -315,21 +304,23 @@ void SVD(int M, int N, float* Df, float** Uf, float** SIGMAf, float** V_Tf)
     double *USigmaMatrixVT = (double *) malloc (sizeof(double) * N * M);
     MatrixMultiply (USigmaMatrix, V_T, USigmaMatrixVT, N, M, M);
 
-    printMatrix (U, N, N);
-    // printMatrix (SigmaMatrix, N, M);
-    // printMatrix (V_T, M, M);
-    // printMatrix (USigmaMatrixVT, N, M);
-
     // Convert to their format
     MatrixAssignDtoF (U, *Uf, N, N);
     MatrixAssignDtoF (SIGMA, *SIGMAf, N, M);
     MatrixAssignDtoF (V_T, *V_Tf, M, M); 
+
+    free (E_vals);
+    free (E);
+    free (lD);
+
+    free (D);
+    free (U);
+    free (SIGMA);
+    free (V_T);
 }
 
 void PCA(int retention, int M, int N, float* Df, float* U, float* SIGMA, float** D_HATf, int *K)
 {
-    printf("%d\n", retention);
-
     double totSigma = 0.0;
     for (int i = 0; i < N; i++) {
         totSigma += SIGMA[i];
@@ -338,14 +329,11 @@ void PCA(int retention, int M, int N, float* Df, float* U, float* SIGMA, float**
     double cumSigma = 0.0;
     for (int i = 0; i < N; i++) {
         cumSigma += SIGMA[i];
-        printf("%f %f %f\n", cumSigma, totSigma, cumSigma / totSigma);
         if (cumSigma / totSigma >= retention / 100.0) {
             *K = i + 1;
             break;
         }
     }
-
-    printf("%d\n", *K);
 
     double *D = (double *) malloc (sizeof(double) * M * N);
     double *W = (double *) malloc (sizeof(double) * N * (*K));
@@ -360,11 +348,12 @@ void PCA(int retention, int M, int N, float* Df, float* U, float* SIGMA, float**
         }
     }
 
-    printMatrix (W, N, *K);
     MatrixMultiply (D, W, D_HAT, M, N, *K);
 
-    printMatrix (D_HAT, M, *K);
-    
     *D_HATf = (float *) malloc (sizeof(float) * M * (*K));
     MatrixAssignDtoF (D_HAT, *D_HATf, M, *K);
+
+    free (D_HAT);
+    free (D);
+    free (W);
 }
