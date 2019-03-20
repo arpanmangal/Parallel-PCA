@@ -98,6 +98,13 @@ void MatrixTranspose (double *A, double *B, int m, int n) {
             B[j*m + i] = A[i*n + j];
 }
 
+void MatrixTransposeDtoF (double *A, float *B, int m, int n) {
+    #pragma omp parallel for schedule (dynamic, 64) collapse (2)
+    for (int i = 0; i < m; i++)
+        for (int j = 0; j < n; j++)
+            B[j*m + i] = A[i*n + j];
+}
+
 void MatrixAssign (double *A, double *B, int m, int n) {
     int size = m * n;
     #pragma omp parallel for schedule (dynamic, 64)
@@ -135,15 +142,15 @@ void makeTriangular (double *M, int N, int upper=1) {
                 M[i*N + j] = 0;
 }
 
-// void printMatrix (double *M, int m, int n) {
-//     for (int i = 0; i < m; i++) {
-//         for (int j = 0; j < n; j++) {
-//             printf("%f ", M[i*n + j]);
-//         }
-//         printf("\n");
-//     }
-//     printf("\n");
-// }
+void printMatrix (double *M, int m, int n) {
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            printf("%f ", M[i*n + j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
 
 void GramSchmidt (double *A, int N, double *At, double *u, double *e, double *p, double *Q, double *R) {
     // Just allocate At, u, e matrices to be N*N; p matrix to be N * 1
@@ -228,86 +235,103 @@ bool sortPair (std::pair<double, int> &a, std::pair<double, int> &b)
 {
     return (a.first > b.first);
 }
-void Decompose (double * Dt, double *E, double* E_vals, int M, int N, double *U, double *SIGMA, double *V_T)
+void Decompose (double * D, double *E, double* E_vals, int M, int N, double *U, double *SIGMA, double *V_T)
 {
-    // D is M*M, U is N*N, SIGMA => N, V_T => M*M
+    // D is M*N, U is M*M, SIGMA => N, V_T => N*N, E is is N*N, E_vals is N.
     std::vector<std::pair<double, int>> EigenVals;
-    for (int i = 0; i < M; i++) {
+    for (int i = 0; i < N; i++) {
         EigenVals.push_back(std::make_pair(sqrt(abs(E_vals[i])), i));
     }
     std::sort (EigenVals.begin(), EigenVals.end(), sortPair);
     
-    MatrixTranspose (E, V_T, M, M);
-    MatrixAssign (V_T, E, M, M);
+    MatrixTranspose (E, V_T, N, N);
+    MatrixAssign (V_T, E, N, N);
 
     // Possible parallelisation => no
-    for (int i = 0; i < M; i++) {
+    for (int i = 0; i < N; i++) {
         int rank = EigenVals[i].second;
-        MatrixAssign (E + rank*M, V_T + i*M, 1, M);
-        if (i < N)
-            SIGMA [i] = EigenVals[i].first;
+        MatrixAssign (E + rank*N, V_T + i*N, 1, N);
+        SIGMA [i] = EigenVals[i].first;
     }
 
-    double *SigmaInvMatrix = (double *) malloc (sizeof(double) * M * N);
-    double *VSigmaInvMatrix = (double *) malloc (sizeof(double) * M * N);
+    // printMatrix (SIGMA, 1, N);
+    // exit(0);
+
+    double *SigmaInvMatrix = (double *) malloc (sizeof(double) * N * M);
+    double *VSigmaInvMatrix = (double *) malloc (sizeof(double) * N * M);
 
     #pragma omp parallel for schedule (dynamic, 64) collapse (2)
-    for (int i = 0; i < M; i++) {
-        for (int j = 0; j < N; j++) {
-            SigmaInvMatrix [i*N + j] = (i == j) * (1 / SIGMA[j]);
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < M; j++) {
+            SigmaInvMatrix [i*M + j] = (i == j) * (1 / SIGMA[i]);
         }
     }
-    MatrixTranspose (V_T, E, M, M);
-    MatrixMultiply (E, SigmaInvMatrix, VSigmaInvMatrix, M, M, N);
+    MatrixTranspose (V_T, E, N, N);
+    MatrixMultiply (E, SigmaInvMatrix, VSigmaInvMatrix, N, N, M);
 
-    MatrixMultiply (Dt, VSigmaInvMatrix, U, N, M, N);
+    MatrixMultiply (D, VSigmaInvMatrix, U, M, N, M);
 }
 
 void SVD(int M, int N, float* Df, float** Uf, float** SIGMAf, float** V_Tf)
 {
-    omp_set_num_threads(4);
+    omp_set_num_threads(1);
     srand (0); // Deterministically Random
 
     // Double Matrices
     double *D = (double *) malloc (sizeof(double) * M * N);
-    double *U = (double*) malloc(sizeof(double) * N*N);
-	double *SIGMA = (double*) malloc(sizeof(double) * N*M);
-	double *V_T = (double*) malloc(sizeof(double) * M*M);
+    double *U = (double*) malloc(sizeof(double) * M*M);
+	double *SIGMA = (double*) malloc(sizeof(double) * N);
+	double *V_T = (double*) malloc(sizeof(double) * N*N);
 
     MatrixAssignFtoD (Df, D, M, N);
 
     double *Dt = (double *) malloc (sizeof(double) * N * M);
     MatrixTranspose (D, Dt, M, N);
 
-    double *SVDMatrix = (double *) malloc (sizeof(double) * M * M);
-    MatrixMultiply (D, Dt, SVDMatrix, M, N, M);
+    double *SVDMatrix = (double *) malloc (sizeof(double) * N * N);
+    MatrixMultiply (Dt, D, SVDMatrix, N, M, N);
 
-    double *E_vals = (double *) malloc (sizeof(double) * M);
-    double *E = (double *) malloc (sizeof(double) * M * M);
-    double *lD = (double *) malloc (sizeof(double) * M * M);
+    printMatrix (SVDMatrix, N, N);
+    // exit(0);
+
+    double *E_vals = (double *) malloc (sizeof(double) * N);
+    double *E = (double *) malloc (sizeof(double) * N*N);
+    double *lD = (double *) malloc (sizeof(double) * N*N);
     
     // Finding all eigenvalues
-    QR (SVDMatrix, lD, M, E_vals, E);
+    QR (SVDMatrix, lD, N, E_vals, E);
+    printMatrix (E_vals, 1, N);
+    printMatrix (E, N, N);
+    // exit(0);
 
     // Extracting first N eigenvalues and computing UVSigma
-    Decompose (Dt, E, E_vals, M, N, U, SIGMA, V_T);
+    Decompose (D, E, E_vals, M, N, U, SIGMA, V_T);
+    printMatrix (U, M, M);
+    printMatrix (SIGMA, 1, N);
+    printMatrix (V_T, N, N);
+    // exit(0);
 
-    double *SigmaMatrix = (double *) malloc (sizeof(double) * N * M);
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < M; j++) {
-            SigmaMatrix[i * M + j] = (i == j) * (SIGMA)[j];
+    double *SigmaMatrix = (double *) malloc (sizeof(double) * M * N);
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < N; j++) {
+            SigmaMatrix[i * N + j] = (i == j) * (SIGMA)[j];
         }
     }
-    double *USigmaMatrix = (double *) malloc (sizeof(double) * N * M);
-    MatrixMultiply (U, SigmaMatrix, USigmaMatrix, N, N, M);
+    double *USigmaMatrix = (double *) malloc (sizeof(double) * M * N);
+    MatrixMultiply (U, SigmaMatrix, USigmaMatrix, M, M, N);
 
-    double *USigmaMatrixVT = (double *) malloc (sizeof(double) * N * M);
-    MatrixMultiply (USigmaMatrix, V_T, USigmaMatrixVT, N, M, M);
+    double *USigmaMatrixVT = (double *) malloc (sizeof(double) * M * N);
+    MatrixMultiply (USigmaMatrix, V_T, USigmaMatrixVT, M, N, N);
+
+    printMatrix (USigmaMatrixVT, M, N);
+    // exit(0);
 
     // Convert to their format
-    MatrixAssignDtoF (U, *Uf, N, N);
-    MatrixAssignDtoF (SIGMA, *SIGMAf, N, M);
-    MatrixAssignDtoF (V_T, *V_Tf, M, M); 
+    MatrixTransposeDtoF (U, *V_Tf, M, M);
+    MatrixAssignDtoF (SIGMA, *SIGMAf, N, 1);
+    MatrixTransposeDtoF (V_T, *Uf, N, N);
+    // MatrixAssignDtoF (U, *Uf, N, N);
+    // MatrixAssignDtoF (V_T, *V_Tf, M, M); 
 
     free (E_vals);
     free (E);
@@ -323,12 +347,12 @@ void PCA(int retention, int M, int N, float* Df, float* U, float* SIGMA, float**
 {
     double totSigma = 0.0;
     for (int i = 0; i < N; i++) {
-        totSigma += SIGMA[i];
+        totSigma += SIGMA[i] * SIGMA[i];
     }
 
     double cumSigma = 0.0;
     for (int i = 0; i < N; i++) {
-        cumSigma += SIGMA[i];
+        cumSigma += SIGMA[i] * SIGMA[i];
         if (cumSigma / totSigma >= retention / 100.0) {
             *K = i + 1;
             break;
