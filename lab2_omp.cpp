@@ -142,15 +142,15 @@ void makeTriangular (double *M, int N, int upper=1) {
                 M[i*N + j] = 0;
 }
 
-void printMatrix (double *M, int m, int n) {
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < n; j++) {
-            printf("%f ", M[i*n + j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
+// void printMatrix (double *M, int m, int n) {
+//     for (int i = 0; i < m; i++) {
+//         for (int j = 0; j < n; j++) {
+//             printf("%f ", M[i*n + j]);
+//         }
+//         printf("\n");
+//     }
+//     printf("\n");
+// }
 
 void GramSchmidt (double *A, int N, double *At, double *u, double *e, double *p, double *Q, double *R) {
     // Just allocate At, u, e matrices to be N*N; p matrix to be N * 1
@@ -291,8 +291,6 @@ void SVD(int M, int N, float* Df, float** Uf, float** SIGMAf, float** V_Tf)
     double *SVDMatrix = (double *) malloc (sizeof(double) * N * N);
     MatrixMultiply (Dt, D, SVDMatrix, N, M, N);
 
-    printMatrix (SVDMatrix, N, N);
-    // exit(0);
 
     double *E_vals = (double *) malloc (sizeof(double) * N);
     double *E = (double *) malloc (sizeof(double) * N*N);
@@ -300,38 +298,26 @@ void SVD(int M, int N, float* Df, float** Uf, float** SIGMAf, float** V_Tf)
     
     // Finding all eigenvalues
     QR (SVDMatrix, lD, N, E_vals, E);
-    printMatrix (E_vals, 1, N);
-    printMatrix (E, N, N);
-    // exit(0);
 
     // Extracting first N eigenvalues and computing UVSigma
     Decompose (D, E, E_vals, M, N, U, SIGMA, V_T);
-    printMatrix (U, M, M);
-    printMatrix (SIGMA, 1, N);
-    printMatrix (V_T, N, N);
-    // exit(0);
 
-    double *SigmaMatrix = (double *) malloc (sizeof(double) * M * N);
-    for (int i = 0; i < M; i++) {
-        for (int j = 0; j < N; j++) {
-            SigmaMatrix[i * N + j] = (i == j) * (SIGMA)[j];
-        }
-    }
-    double *USigmaMatrix = (double *) malloc (sizeof(double) * M * N);
-    MatrixMultiply (U, SigmaMatrix, USigmaMatrix, M, M, N);
+    // double *SigmaMatrix = (double *) malloc (sizeof(double) * M * N);
+    // for (int i = 0; i < M; i++) {
+    //     for (int j = 0; j < N; j++) {
+    //         SigmaMatrix[i * N + j] = (i == j) * (SIGMA)[j];
+    //     }
+    // }
+    // double *USigmaMatrix = (double *) malloc (sizeof(double) * M * N);
+    // MatrixMultiply (U, SigmaMatrix, USigmaMatrix, M, M, N);
 
-    double *USigmaMatrixVT = (double *) malloc (sizeof(double) * M * N);
-    MatrixMultiply (USigmaMatrix, V_T, USigmaMatrixVT, M, N, N);
-
-    printMatrix (USigmaMatrixVT, M, N);
-    // exit(0);
+    // double *USigmaMatrixVT = (double *) malloc (sizeof(double) * M * N);
+    // MatrixMultiply (USigmaMatrix, V_T, USigmaMatrixVT, M, N, N);
 
     // Convert to their format
     MatrixTransposeDtoF (U, *V_Tf, M, M);
     MatrixAssignDtoF (SIGMA, *SIGMAf, N, 1);
     MatrixTransposeDtoF (V_T, *Uf, N, N);
-    // MatrixAssignDtoF (U, *Uf, N, N);
-    // MatrixAssignDtoF (V_T, *V_Tf, M, M); 
 
     free (E_vals);
     free (E);
